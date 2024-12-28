@@ -1,0 +1,16 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: usage-management-service
+
+eventhub:
+  connectionString: ${EVENT_HUB_CONNECTION_STRING}
+  name: ${EVENT_HUB_NAME}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics

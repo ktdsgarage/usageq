@@ -1,0 +1,20 @@
+dependencies {
+    implementation project(':common')
+    
+    implementation 'org.springframework.boot:spring-boot-starter'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    implementation 'com.azure:azure-messaging-eventhubs:5.15.5'
+    implementation 'com.azure:azure-identity:1.9.0'
+
+    // Azure Storage 의존성 추가
+    implementation 'com.azure:azure-storage-blob:12.22.2'
+    implementation 'com.azure:azure-messaging-eventhubs-checkpointstore-blob:1.16.7'
+
+    runtimeOnly 'org.postgresql:postgresql'
+}
+
+
+bootJar {
+    archiveFileName = "usage-update-service.jar"
+}

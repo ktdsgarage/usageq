@@ -1,0 +1,10 @@
+dependencies {
+    implementation project(':common')
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'com.azure:azure-messaging-eventhubs:5.15.5'
+
+}
+
+bootJar {
+    archiveFileName = "usage-management-service.jar"
+}

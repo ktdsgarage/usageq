@@ -1,0 +1,42 @@
+server:
+ port: ${SERVER_PORT:8081}
+
+spring:
+ application:
+   name: usage-query-service
+   
+ datasource:
+   url: jdbc:postgresql://${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
+   username: ${POSTGRES_USER:telecomuser}
+   password: ${POSTGRES_PASSWORD:Passw0rd}
+   hikari:
+     maximum-pool-size: 5
+     
+ jpa:
+   hibernate:
+     ddl-auto: validate
+   properties:
+     hibernate:
+       dialect: org.hibernate.dialect.PostgreSQLDialect
+       format_sql: true
+   show-sql: true
+
+ data:
+   redis:
+     host: ${REDIS_HOST:localhost}
+     port: ${REDIS_PORT:6379}
+     username: ${REDIS_USERNAME:default}  # Redis 사용자명 추가
+     password: ${REDIS_PASSWORD:}
+     timeout: 3000
+     
+ cache:
+   type: redis
+   redis:
+     time-to-live: 600000 # 10분
+     cache-null-values: false
+
+management:
+ endpoints:
+   web:
+     exposure:
+       include: health,info,metrics

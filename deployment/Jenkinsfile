@@ -35,6 +35,7 @@ podTemplate(
     ]
 ) {
     node(PIPELINE_ID) {
+        // Environment variables
         def props
         def imageTag = getImageTag()
         def manifest = "deploy.yaml"
@@ -62,8 +63,8 @@ podTemplate(
                 container('gradle') {
                     sh """
                         chmod +x gradlew
-                        ./gradlew usage-query-service:clean usage-query-service:build -x test
                         ./gradlew usage-management-service:clean usage-management-service:build -x test
+                        ./gradlew usage-query-service:clean usage-query-service:build -x test
                         ./gradlew usage-update-service:clean usage-update-service:build -x test
                     """
                 }
@@ -78,17 +79,17 @@ podTemplate(
 
                     sh """
                         # Management Service Image
-                        podman build -f deployment/Dockerfile-management \
+                        podman build -f deployment/Dockerfile-usage-management-service \
                             -t ${managementImagePath}:${imageTag} \
                             -t ${managementImagePath}:latest .
 
                         # Query Service Image
-                        podman build -f deployment/Dockerfile-query \
+                        podman build -f deployment/Dockerfile-usage-query-service \
                             -t ${queryImagePath}:${imageTag} \
                             -t ${queryImagePath}:latest .
 
                         # Update Service Image
-                        podman build -f deployment/Dockerfile-update \
+                        podman build -f deployment/Dockerfile-usage-update-service \
                             -t ${updateImagePath}:${imageTag} \
                             -t ${updateImagePath}:latest .
                     """
@@ -143,12 +144,13 @@ podTemplate(
                         export resources_requests_memory=${props.resources_requests_memory}
                         export resources_limits_cpu=${props.resources_limits_cpu}
                         export resources_limits_memory=${props.resources_limits_memory}
-                        export EVENT_HUB_CONNECTION_STRING='${props.EVENT_HUB_CONNECTION_STRING}'
-                        export EVENT_HUB_NAME='${props.EVENT_HUB_NAME}'
-                        export STORAGE_CONNECTION_STRING='${props.STORAGE_CONNECTION_STRING}'
 
                         # Generate deployment file
                         envsubst < deployment/${manifest}.template > deployment/${manifest}
+
+                        # Debug: Print generated manifest
+                        echo "Generated manifest:"
+                        cat deployment/${manifest}
                     """
                 }
                 checkError("Deployment YAML Generation Failed")

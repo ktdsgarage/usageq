@@ -18,4 +18,3 @@ dependencies {
 bootJar {
     archiveFileName = "usage-update-service.jar"
 }
-

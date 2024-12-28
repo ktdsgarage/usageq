@@ -12,25 +12,6 @@ def checkError(message) {
     }
 }
 
-// 변경된 파일 목록을 기반으로 서비스별 빌드 여부 결정
-def shouldBuildService(service) {
-    def changedFiles = sh(script: "git diff --name-only HEAD^", returnStdout: true).trim()
-
-    // common 모듈이 변경된 경우 모든 서비스 빌드
-    if (changedFiles.contains("common/")) {
-        echo "Common module changed. Building all services."
-        return true
-    }
-
-    // 특정 서비스의 변경사항이 있는 경우만 해당 서비스 빌드
-    return changedFiles.contains("${service}/")
-}
-
-// 변경사항 있는지 체크하는 헬퍼 함수
-def hasChanges(buildFlags) {
-    return buildFlags.management || buildFlags.query || buildFlags.update
-}
-
 podTemplate(
     label: "${PIPELINE_ID}",
     serviceAccount: 'jenkins',
@@ -54,217 +35,151 @@ podTemplate(
     ]
 ) {
     node(PIPELINE_ID) {
+        // Environment variables
         def props
         def imageTag = getImageTag()
         def manifest = "deploy.yaml"
-
-        // 서비스별 빌드 플래그 초기화
-        def buildFlags = [
-            'management': false,
-            'query': false,
-            'update': false
-        ]
+        def changedServices = []
 
         stage("Get Source") {
             checkout scm
             props = readProperties file: "deployment/deploy_env_vars"
 
-            // 각 서비스별 빌드 여부 확인
-            buildFlags.management = shouldBuildService('usage-management-service')
-            buildFlags.query = shouldBuildService('usage-query-service')
-            buildFlags.update = shouldBuildService('usage-update-service')
+            // Detect changed services
+            def changes = sh(script: 'git diff --name-only HEAD~1', returnStdout: true).trim()
+            if (changes.contains('common/')) {
+                changedServices = ['usage-management-service', 'usage-query-service', 'usage-update-service']
+            } else {
+                if (changes.contains('usage-management-service/')) changedServices.add('usage-management-service')
+                if (changes.contains('usage-query-service/')) changedServices.add('usage-query-service')
+                if (changes.contains('usage-update-service/')) changedServices.add('usage-update-service')
+            }
 
-            echo "Build flags: ${buildFlags}"
+            if (changedServices.isEmpty()) {
+                currentBuild.result = 'SUCCESS'
+                return
+            }
         }
 
         try {
             stage("Setup AKS") {
-                if (hasChanges(buildFlags)) {
-                    container('azure-cli') {
-                        withCredentials([azureServicePrincipal('azure-credentials')]) {
-                            sh """
-                                az login --service-principal -u \$AZURE_CLIENT_ID -p \$AZURE_CLIENT_SECRET -t \$AZURE_TENANT_ID
-                                az aks get-credentials --resource-group ${props.resource_group} --name ${props.teamid}-aks --overwrite-existing
-                                kubectl create namespace ${props.namespace} --dry-run=client -o yaml | kubectl apply -f -
-                            """
-                        }
+                container('azure-cli') {
+                    withCredentials([azureServicePrincipal('azure-credentials')]) {
+                        sh """
+                            az login --service-principal -u \$AZURE_CLIENT_ID -p \$AZURE_CLIENT_SECRET -t \$AZURE_TENANT_ID
+                            az aks get-credentials --resource-group ${props.resource_group} --name ${props.teamid}-aks --overwrite-existing
+                            kubectl create namespace ${props.namespace} --dry-run=client -o yaml | kubectl apply -f -
+                        """
                     }
-                    checkError("AKS Setup Failed")
                 }
+                checkError("AKS Setup Failed")
             }
 
             stage('Build Applications') {
-                if (hasChanges(buildFlags)) {
-                    container('gradle') {
-                        sh "chmod +x gradlew"
-
-                        if (buildFlags.query) {
-                            sh "./gradlew usage-query-service:clean usage-query-service:build -x test"
-                        }
-                        if (buildFlags.management) {
-                            sh "./gradlew usage-management-service:clean usage-management-service:build -x test"
-                        }
-                        if (buildFlags.update) {
-                            sh "./gradlew usage-update-service:clean usage-update-service:build -x test"
-                        }
-                    }
-                    checkError("Application Build Failed")
-                }
-            }
-
-            stage('Build and Push Container Images') {
-                if (hasChanges(buildFlags)) {
-                    container('podman') {
-                        withCredentials([usernamePassword(
-                            credentialsId: "${props.image_credential}",
-                            usernameVariable: 'USERNAME',
-                            passwordVariable: 'PASSWORD'
-                        )]) {
-                            sh "podman login ${props.registry} --username \$USERNAME --password \$PASSWORD"
-
-                            if (buildFlags.management) {
-                                def managementImagePath = "${props.registry}/${props.image_org}/usage-management-service"
-                                sh """
-                                    podman build -f deployment/Dockerfile-management \
-                                        -t ${managementImagePath}:${imageTag} \
-                                        -t ${managementImagePath}:latest .
-                                    podman push ${managementImagePath}:${imageTag}
-                                    podman push ${managementImagePath}:latest
-                                """
-                            }
-
-                            if (buildFlags.query) {
-                                def queryImagePath = "${props.registry}/${props.image_org}/usage-query-service"
-                                sh """
-                                    podman build -f deployment/Dockerfile-query \
-                                        -t ${queryImagePath}:${imageTag} \
-                                        -t ${queryImagePath}:latest .
-                                    podman push ${queryImagePath}:${imageTag}
-                                    podman push ${queryImagePath}:latest
-                                """
-                            }
-
-                            if (buildFlags.update) {
-                                def updateImagePath = "${props.registry}/${props.image_org}/usage-update-service"
-                                sh """
-                                    podman build -f deployment/Dockerfile-update \
-                                        -t ${updateImagePath}:${imageTag} \
-                                        -t ${updateImagePath}:latest .
-                                    podman push ${updateImagePath}:${imageTag}
-                                    podman push ${updateImagePath}:latest
-                                """
-                            }
-                        }
-                    }
-                    checkError("Container Image Build/Push Failed")
-                }
-            }
-
-            stage('Generate and Apply Deployment') {
-                if (hasChanges(buildFlags)) {
-                    container('envsubst') {
-                        def envVars = """
-                            export namespace=${props.namespace}
-                            export resources_requests_cpu=${props.resources_requests_cpu}
-                            export resources_requests_memory=${props.resources_requests_memory}
-                            export resources_limits_cpu=${props.resources_limits_cpu}
-                            export resources_limits_memory=${props.resources_limits_memory}
-                            export EVENT_HUB_CONNECTION_STRING='${props.EVENT_HUB_CONNECTION_STRING}'
-                            export EVENT_HUB_NAME='${props.EVENT_HUB_NAME}'
-                            export STORAGE_CONNECTION_STRING='${props.STORAGE_CONNECTION_STRING}'
-                        """
-
-                        // 변경된 서비스의 이미지 태그만 업데이트
-                        if (buildFlags.management) {
-                            def managementImagePath = "${props.registry}/${props.image_org}/usage-management-service:${imageTag}"
-                            envVars += "\nexport management_image_path=${managementImagePath}"
-                        }
-                        if (buildFlags.query) {
-                            def queryImagePath = "${props.registry}/${props.image_org}/usage-query-service:${imageTag}"
-                            envVars += "\nexport query_image_path=${queryImagePath}"
-                        }
-                        if (buildFlags.update) {
-                            def updateImagePath = "${props.registry}/${props.image_org}/usage-update-service:${imageTag}"
-                            envVars += "\nexport update_image_path=${updateImagePath}"
-                        }
-
-                        // 환경변수 설정 및 deployment 파일 생성
-                        writeFile file: 'env.sh', text: envVars
+                container('gradle') {
+                    changedServices.each { service ->
                         sh """
-                            source env.sh
-                            envsubst < deployment/${manifest}.template > deployment/${manifest}
+                            chmod +x gradlew
+                            ./gradlew ${service}:clean ${service}:build -x test
                         """
                     }
+                }
+                checkError("Application Build Failed")
+            }
 
-                    container('azure-cli') {
-                        if (buildFlags.management) {
+            stage('Build Container Images') {
+                container('podman') {
+                    changedServices.each { service ->
+                        def imagePath = "${props.registry}/${props.image_org}/${service}"
+                        sh """
+                            podman build -f deployment/Dockerfile-${service} \
+                                -t ${imagePath}:${imageTag} \
+                                -t ${imagePath}:latest .
+                        """
+                    }
+                }
+                checkError("Container Image Build Failed")
+            }
+
+            stage('Push Container Images') {
+                container('podman') {
+                    withCredentials([usernamePassword(
+                        credentialsId: "${props.image_credential}",
+                        usernameVariable: 'USERNAME',
+                        passwordVariable: 'PASSWORD'
+                    )]) {
+                        sh """
+                            podman login ${props.registry} --username \$USERNAME --password \$PASSWORD
+                        """
+
+                        changedServices.each { service ->
+                            def imagePath = "${props.registry}/${props.image_org}/${service}"
                             sh """
-                                kubectl apply -f deployment/${manifest} -l app=usage-management-service
-                                echo "Waiting for management service pods..."
-                                kubectl wait --for=condition=ready pod -l "app=usage-management-service" -n ${props.namespace} --timeout=300s
-                            """
-                        }
-                        if (buildFlags.query) {
-                            sh """
-                                kubectl apply -f deployment/${manifest} -l app=usage-query-service
-                                echo "Waiting for query service pods..."
-                                kubectl wait --for=condition=ready pod -l "app=usage-query-service" -n ${props.namespace} --timeout=300s
-                            """
-                        }
-                        if (buildFlags.update) {
-                            sh """
-                                kubectl apply -f deployment/${manifest} -l app=usage-update-service
-                                echo "Waiting for update service pods..."
-                                kubectl wait --for=condition=ready pod -l "app=usage-update-service" -n ${props.namespace} --timeout=300s
+                                podman push ${imagePath}:${imageTag}
+                                podman push ${imagePath}:latest
                             """
                         }
                     }
-                    checkError("Deployment Failed")
                 }
+                checkError("Container Image Push Failed")
+            }
+
+            stage('Generate Deployment YAML') {
+                container('envsubst') {
+                    def managementImagePath = "${props.registry}/${props.image_org}/usage-management-service:${imageTag}"
+                    def queryImagePath = "${props.registry}/${props.image_org}/usage-query-service:${imageTag}"
+                    def updateImagePath = "${props.registry}/${props.image_org}/usage-update-service:${imageTag}"
+
+                    sh """
+                        export namespace=${props.namespace}
+                        export management_image_path=${managementImagePath}
+                        export query_image_path=${queryImagePath}
+                        export update_image_path=${updateImagePath}
+                        export resources_requests_cpu=${props.resources_requests_cpu}
+                        export resources_requests_memory=${props.resources_requests_memory}
+                        export resources_limits_cpu=${props.resources_limits_cpu}
+                        export resources_limits_memory=${props.resources_limits_memory}
+
+                        # Generate deployment file and output for debugging
+                        envsubst < deployment/${manifest}.template > deployment/${manifest}
+                        echo "Generated manifest:"
+                        cat deployment/${manifest}
+                    """
+                }
+                checkError("Deployment YAML Generation Failed")
+            }
+
+            stage('Deploy to AKS') {
+                container('azure-cli') {
+                    sh """
+                        kubectl apply -f deployment/${manifest}
+
+                        # Wait for application pods to be ready
+                        echo "Waiting for service pods..."
+                        for service in ${changedServices.join(' ')}; do
+                            kubectl wait --for=condition=ready pod -l "app=\$service" -n ${props.namespace} --timeout=300s
+                        done
+                    """
+                }
+                checkError("Deployment to AKS Failed")
             }
 
             stage('Verify Deployment') {
-                if (hasChanges(buildFlags)) {
-                    container('azure-cli') {
-                        if (buildFlags.management) {
-                            sh """
-                                echo "Verifying management service endpoint..."
-                                MANAGEMENT_IP=\$(kubectl get svc usage-management-service -n ${props.namespace} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-                                echo "Management Service IP: \$MANAGEMENT_IP"
+                container('azure-cli') {
+                    changedServices.each { service ->
+                        sh """
+                            echo "Verifying \${service} endpoint..."
+                            SERVICE_IP=\$(kubectl get svc \${service} -n ${props.namespace} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+                            echo "\${service} IP: \$SERVICE_IP"
 
-                                if [ -z "\$MANAGEMENT_IP" ]; then
-                                    echo "Error: Management Service IP not available"
-                                    exit 1
-                                fi
-                            """
-                        }
-                        if (buildFlags.query) {
-                            sh """
-                                echo "Verifying query service endpoint..."
-                                QUERY_IP=\$(kubectl get svc usage-query-service -n ${props.namespace} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-                                echo "Query Service IP: \$QUERY_IP"
-
-                                if [ -z "\$QUERY_IP" ]; then
-                                    echo "Error: Query Service IP not available"
-                                    exit 1
-                                fi
-                            """
-                        }
-                        if (buildFlags.update) {
-                            sh """
-                                echo "Verifying update service endpoint..."
-                                UPDATE_IP=\$(kubectl get svc usage-update-service -n ${props.namespace} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-                                echo "Update Service IP: \$UPDATE_IP"
-
-                                if [ -z "\$UPDATE_IP" ]; then
-                                    echo "Error: Update Service IP not available"
-                                    exit 1
-                                fi
-                            """
-                        }
+                            if [ -z "\$SERVICE_IP" ]; then
+                                echo "Error: Service IP not available for \${service}"
+                                exit 1
+                            fi
+                        """
                     }
-                    checkError("Deployment Verification Failed")
                 }
+                checkError("Deployment Verification Failed")
             }
 
             currentBuild.result = 'SUCCESS'

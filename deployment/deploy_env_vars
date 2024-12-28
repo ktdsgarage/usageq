@@ -1,0 +1,24 @@
+# Application Settings
+application_name=usageq
+resource_group=tiu-dgga-rg
+location=koreacentral
+
+# Team Settings
+teamid=unicorn
+namespace=unicorn-usageq-ns
+
+# Container Registry Settings
+registry=unicorncr.azurecr.io
+image_org=telecom
+image_credential=acr-credentials
+
+# Resource Settings
+resources_requests_cpu=250m
+resources_requests_memory=512Mi
+resources_limits_cpu=500m
+resources_limits_memory=1024Mi
+
+# Event Hub Settings
+EVENT_HUB_CONNECTION_STRING=Endpoint=sb://unicorn-ns-usage.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=mMSrE3nkjMWpp8OOFywKH1B5Lti06YmiN+AEhJlCmtQ=
+EVENT_HUB_NAME=unicorn-name-usage
+STORAGE_CONNECTION_STRING=DefaultEndpointsProtocol=https;EndpointSuffix=core.windows.net;AccountName=unicornstorageusageq;AccountKey=374LvAxq4frBGT/Xg0Eq802vjiJRTm2ZbhU8Rlj+7SQXcAz4M0B0p6d5Ah7bzXSRrLQBY6mqozop+AStHd35MA==;BlobEndpoint=https://unicornstorageusageq.blob.core.windows.net/;FileEndpoint=https://unicornstorageusageq.file.core.windows.net/;QueueEndpoint=https://unicornstorageusageq.queue.core.windows.net/;TableEndpoint=https://unicornstorageusageq.table.core.windows.net/

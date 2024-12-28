@@ -1,0 +1,177 @@
+# ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: usage-config
+  namespace: ${namespace}
+data:
+  POSTGRES_HOST: "postgres-usageq-postgresql-primary-hl"
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: "telecomdb"
+  REDIS_HOST: "redis-usageq-master"
+  REDIS_PORT: "6379"
+  REDIS_USERNAME: "root"
+  EVENT_HUB_CONSUMER_GROUP: "$Default"
+  BLOB_CONTAINER: "unicorn-checkpoints-usageq"
+
+---
+# Secret
+apiVersion: v1
+kind: Secret
+metadata:
+  name: usage-secret
+  namespace: ${namespace}
+stringData:
+  POSTGRES_USER: "postgres"
+  POSTGRES_PASSWORD: "Passw0rd"
+  REDIS_PASSWORD: "Passw0rd"
+  EVENT_HUB_CONNECTION_STRING: "${EVENT_HUB_CONNECTION_STRING}"
+  EVENT_HUB_NAME: "${EVENT_HUB_NAME}"
+  STORAGE_CONNECTION_STRING: "${STORAGE_CONNECTION_STRING}"
+
+---
+# Management Service
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: usage-management-service
+  namespace: ${namespace}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: usage-management-service
+  template:
+    metadata:
+      labels:
+        app: usage-management-service
+    spec:
+      containers:
+      - name: usage-management-service
+        image: ${management_image_path}
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+        envFrom:
+        - configMapRef:
+            name: usage-config
+        - secretRef:
+            name: usage-secret
+        resources:
+          requests:
+            cpu: ${resources_requests_cpu}
+            memory: ${resources_requests_memory}
+          limits:
+            cpu: ${resources_limits_cpu}
+            memory: ${resources_limits_memory}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: usage-management-service
+  namespace: ${namespace}
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 80
+    targetPort: 8080
+  selector:
+    app: usage-management-service
+
+---
+# Query Service
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: usage-query-service
+  namespace: ${namespace}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: usage-query-service
+  template:
+    metadata:
+      labels:
+        app: usage-query-service
+    spec:
+      containers:
+      - name: usage-query-service
+        image: ${query_image_path}
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8081
+        envFrom:
+        - configMapRef:
+            name: usage-config
+        - secretRef:
+            name: usage-secret
+        resources:
+          requests:
+            cpu: ${resources_requests_cpu}
+            memory: ${resources_requests_memory}
+          limits:
+            cpu: ${resources_limits_cpu}
+            memory: ${resources_limits_memory}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: usage-query-service
+  namespace: ${namespace}
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 80
+    targetPort: 8081
+  selector:
+    app: usage-query-service
+
+---
+# Update Service
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: usage-update-service
+  namespace: ${namespace}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: usage-update-service
+  template:
+    metadata:
+      labels:
+        app: usage-update-service
+    spec:
+      containers:
+      - name: usage-update-service
+        image: ${update_image_path}
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8082
+        envFrom:
+        - configMapRef:
+            name: usage-config
+        - secretRef:
+            name: usage-secret
+        resources:
+          requests:
+            cpu: ${resources_requests_cpu}
+            memory: ${resources_requests_memory}
+          limits:
+            cpu: ${resources_limits_cpu}
+            memory: ${resources_limits_memory}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: usage-update-service
+  namespace: ${namespace}
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 80
+    targetPort: 8082
+  selector:
+    app: usage-update-service

@@ -1,4 +1,4 @@
-name: CI/CD Pipeline
+name: Usage Query System CI/CD
 
 on:
   push:
@@ -17,10 +17,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v2
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v2
         with:
           java-version: '17'
           distribution: 'temurin'
@@ -30,69 +30,66 @@ jobs:
 
       - name: Build with Gradle
         run: |
-          ./gradlew usage-query-service:build -x test
-          ./gradlew usage-management-service:build -x test
-          ./gradlew usage-update-service:build -x test
+          ./gradlew usage-management-service:clean usage-management-service:build -x test
+          ./gradlew usage-query-service:clean usage-query-service:build -x test
+          ./gradlew usage-update-service:clean usage-update-service:build -x test
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v2
         with:
-          name: service-jars
+          name: app-builds
           path: |
-            usage-query-service/build/libs/*.jar
-            usage-management-service/build/libs/*.jar
-            usage-update-service/build/libs/*.jar
+            usage-management-service/build/libs/
+            usage-query-service/build/libs/
+            usage-update-service/build/libs/
 
   release:
     needs: build
     runs-on: ubuntu-latest
     outputs:
-      image_tag: ${{ steps.timestamp.outputs.value }}
+      imageTag: ${{ steps.create-tag.outputs.tag }}
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v2
 
-      - name: Generate timestamp
-        id: timestamp
-        run: echo "value=$(date +'%Y%m%d%H%M%S')" >> $GITHUB_OUTPUT
+      - name: Generate image tag
+        id: create-tag
+        run: |
+          echo "tag=$(date +'%Y%m%d%H%M%S')" >> $GITHUB_OUTPUT
 
       - name: Download build artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v2
         with:
-          name: service-jars
+          name: app-builds
 
-      - name: Login to Azure
-        uses: azure/login@v1
+      - name: Azure Container Registry Login
+        uses: azure/docker-login@v1
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          login-server: ${{ env.REGISTRY }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
 
-      - name: Login to ACR
+      - name: Build and Push Docker Images
         run: |
-          az acr login --name unicorncr
-
-      - name: Build and push container images
-        run: |
-          IMAGE_TAG=${{ steps.timestamp.outputs.value }}
-          
-          # Query Service
-          docker build -f deployment/Dockerfile-query \
-            -t ${{ env.REGISTRY }}/telecom/usage-query-service:${IMAGE_TAG} \
-            -t ${{ env.REGISTRY }}/telecom/usage-query-service:latest .
-          docker push ${{ env.REGISTRY }}/telecom/usage-query-service:${IMAGE_TAG}
-          docker push ${{ env.REGISTRY }}/telecom/usage-query-service:latest
-          
           # Management Service
-          docker build -f deployment/Dockerfile-management \
-            -t ${{ env.REGISTRY }}/telecom/usage-management-service:${IMAGE_TAG} \
+          docker build -f deployment/Dockerfile-usage-management-service \
+            -t ${{ env.REGISTRY }}/telecom/usage-management-service:${{ steps.create-tag.outputs.tag }} \
             -t ${{ env.REGISTRY }}/telecom/usage-management-service:latest .
-          docker push ${{ env.REGISTRY }}/telecom/usage-management-service:${IMAGE_TAG}
+          docker push ${{ env.REGISTRY }}/telecom/usage-management-service:${{ steps.create-tag.outputs.tag }}
           docker push ${{ env.REGISTRY }}/telecom/usage-management-service:latest
           
+          # Query Service
+          docker build -f deployment/Dockerfile-usage-query-service \
+            -t ${{ env.REGISTRY }}/telecom/usage-query-service:${{ steps.create-tag.outputs.tag }} \
+            -t ${{ env.REGISTRY }}/telecom/usage-query-service:latest .
+          docker push ${{ env.REGISTRY }}/telecom/usage-query-service:${{ steps.create-tag.outputs.tag }}
+          docker push ${{ env.REGISTRY }}/telecom/usage-query-service:latest
+          
           # Update Service
-          docker build -f deployment/Dockerfile-update \
-            -t ${{ env.REGISTRY }}/telecom/usage-update-service:${IMAGE_TAG} \
+          docker build -f deployment/Dockerfile-usage-update-service \
+            -t ${{ env.REGISTRY }}/telecom/usage-update-service:${{ steps.create-tag.outputs.tag }} \
             -t ${{ env.REGISTRY }}/telecom/usage-update-service:latest .
-          docker push ${{ env.REGISTRY }}/telecom/usage-update-service:${IMAGE_TAG}
+          docker push ${{ env.REGISTRY }}/telecom/usage-update-service:${{ steps.create-tag.outputs.tag }}
           docker push ${{ env.REGISTRY }}/telecom/usage-update-service:latest
 
   deploy:
@@ -100,15 +97,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v2
 
-      - name: Login to Azure
+      - name: Azure Login
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Set AKS context
-        uses: azure/aks-set-context@v3
+      - name: Set AKS Context
+        uses: azure/aks-set-context@v1
         with:
           resource-group: ${{ env.RESOURCE_GROUP }}
           cluster-name: ${{ env.CLUSTER_NAME }}
@@ -117,15 +114,13 @@ jobs:
         run: |
           kubectl create namespace ${{ env.NAMESPACE }} --dry-run=client -o yaml | kubectl apply -f -
 
-      - name: Generate deployment manifest
-        env:
-          IMAGE_TAG: ${{ needs.release.outputs.image_tag }}
+      - name: Generate Deployment Manifest
         run: |
           # Export variables for envsubst
           export namespace=${{ env.NAMESPACE }}
-          export query_image_path=${{ env.REGISTRY }}/telecom/usage-query-service:${IMAGE_TAG}
-          export management_image_path=${{ env.REGISTRY }}/telecom/usage-management-service:${IMAGE_TAG}
-          export update_image_path=${{ env.REGISTRY }}/telecom/usage-update-service:${IMAGE_TAG}
+          export management_image_path=${{ env.REGISTRY }}/telecom/usage-management-service:${{ needs.release.outputs.imageTag }}
+          export query_image_path=${{ env.REGISTRY }}/telecom/usage-query-service:${{ needs.release.outputs.imageTag }}
+          export update_image_path=${{ env.REGISTRY }}/telecom/usage-update-service:${{ needs.release.outputs.imageTag }}
           export resources_requests_cpu=250m
           export resources_requests_memory=512Mi
           export resources_limits_cpu=500m
@@ -145,25 +140,25 @@ jobs:
         run: |
           kubectl apply -f deployment/deploy.yaml
           
-          # Wait for deployments to be ready
-          kubectl wait --for=condition=ready pod -l "app=usage-query-service" -n ${{ env.NAMESPACE }} --timeout=300s
+          # Wait for pods to be ready
           kubectl wait --for=condition=ready pod -l "app=usage-management-service" -n ${{ env.NAMESPACE }} --timeout=300s
+          kubectl wait --for=condition=ready pod -l "app=usage-query-service" -n ${{ env.NAMESPACE }} --timeout=300s
           kubectl wait --for=condition=ready pod -l "app=usage-update-service" -n ${{ env.NAMESPACE }} --timeout=300s
 
-      - name: Verify services
+      - name: Verify Deployment
         run: |
           echo "Verifying service endpoints..."
           
           # Get service IPs
-          QUERY_IP=$(kubectl get svc usage-query-service -n ${{ env.NAMESPACE }} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
           MANAGEMENT_IP=$(kubectl get svc usage-management-service -n ${{ env.NAMESPACE }} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          QUERY_IP=$(kubectl get svc usage-query-service -n ${{ env.NAMESPACE }} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
           UPDATE_IP=$(kubectl get svc usage-update-service -n ${{ env.NAMESPACE }} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
           
-          echo "Query Service IP: $QUERY_IP"
           echo "Management Service IP: $MANAGEMENT_IP"
+          echo "Query Service IP: $QUERY_IP" 
           echo "Update Service IP: $UPDATE_IP"
           
-          if [ -z "$QUERY_IP" ] || [ -z "$MANAGEMENT_IP" ] || [ -z "$UPDATE_IP" ]; then
+          if [ -z "$MANAGEMENT_IP" ] || [ -z "$QUERY_IP" ] || [ -z "$UPDATE_IP" ]; then
             echo "Error: Service IPs not available"
             exit 1
           fi

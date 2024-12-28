@@ -13,7 +13,6 @@ data:
   REDIS_USERNAME: "root"
   EVENT_HUB_CONSUMER_GROUP: "$Default"
   BLOB_CONTAINER: "unicorn-checkpoints-usageq"
-
 ---
 # Secret
 apiVersion: v1
@@ -25,10 +24,9 @@ stringData:
   POSTGRES_USER: "postgres"
   POSTGRES_PASSWORD: "Passw0rd"
   REDIS_PASSWORD: "Passw0rd"
-  EVENT_HUB_CONNECTION_STRING: "${EVENT_HUB_CONNECTION_STRING}"
-  EVENT_HUB_NAME: "${EVENT_HUB_NAME}"
-  STORAGE_CONNECTION_STRING: "${STORAGE_CONNECTION_STRING}"
-
+  EVENT_HUB_CONNECTION_STRING: "Endpoint=sb://unicorn-ns-usage.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=mMSrE3nkjMWpp8OOFywKH1B5Lti06YmiN+AEhJlCmtQ="
+  EVENT_HUB_NAME: "unicorn-name-usage"
+  STORAGE_CONNECTION_STRING: "DefaultEndpointsProtocol=https;EndpointSuffix=core.windows.net;AccountName=unicornstorageusageq;AccountKey=374LvAxq4frBGT/Xg0Eq802vjiJRTm2ZbhU8Rlj+7SQXcAz4M0B0p6d5Ah7bzXSRrLQBY6mqozop+AStHd35MA==;BlobEndpoint=https://unicornstorageusageq.blob.core.windows.net/;FileEndpoint=https://unicornstorageusageq.file.core.windows.net/;QueueEndpoint=https://unicornstorageusageq.queue.core.windows.net/;TableEndpoint=https://unicornstorageusageq.table.core.windows.net/"
 ---
 # Management Service
 apiVersion: apps/v1
@@ -77,7 +75,6 @@ spec:
     targetPort: 8080
   selector:
     app: usage-management-service
-
 ---
 # Query Service
 apiVersion: apps/v1
@@ -126,7 +123,6 @@ spec:
     targetPort: 8081
   selector:
     app: usage-query-service
-
 ---
 # Update Service
 apiVersion: apps/v1

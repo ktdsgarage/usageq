@@ -1,0 +1,169 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  REGISTRY: unicorncr.azurecr.io
+  RESOURCE_GROUP: tiu-dgga-rg
+  CLUSTER_NAME: unicorn-aks
+  NAMESPACE: unicorn-usageq-ns
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build with Gradle
+        run: |
+          ./gradlew usage-query-service:build -x test
+          ./gradlew usage-management-service:build -x test
+          ./gradlew usage-update-service:build -x test
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: service-jars
+          path: |
+            usage-query-service/build/libs/*.jar
+            usage-management-service/build/libs/*.jar
+            usage-update-service/build/libs/*.jar
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.timestamp.outputs.value }}
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Generate timestamp
+        id: timestamp
+        run: echo "value=$(date +'%Y%m%d%H%M%S')" >> $GITHUB_OUTPUT
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: service-jars
+
+      - name: Login to Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Login to ACR
+        run: |
+          az acr login --name unicorncr
+
+      - name: Build and push container images
+        run: |
+          IMAGE_TAG=${{ steps.timestamp.outputs.value }}
+          
+          # Query Service
+          docker build -f deployment/Dockerfile-query \
+            -t ${{ env.REGISTRY }}/telecom/usage-query-service:${IMAGE_TAG} \
+            -t ${{ env.REGISTRY }}/telecom/usage-query-service:latest .
+          docker push ${{ env.REGISTRY }}/telecom/usage-query-service:${IMAGE_TAG}
+          docker push ${{ env.REGISTRY }}/telecom/usage-query-service:latest
+          
+          # Management Service
+          docker build -f deployment/Dockerfile-management \
+            -t ${{ env.REGISTRY }}/telecom/usage-management-service:${IMAGE_TAG} \
+            -t ${{ env.REGISTRY }}/telecom/usage-management-service:latest .
+          docker push ${{ env.REGISTRY }}/telecom/usage-management-service:${IMAGE_TAG}
+          docker push ${{ env.REGISTRY }}/telecom/usage-management-service:latest
+          
+          # Update Service
+          docker build -f deployment/Dockerfile-update \
+            -t ${{ env.REGISTRY }}/telecom/usage-update-service:${IMAGE_TAG} \
+            -t ${{ env.REGISTRY }}/telecom/usage-update-service:latest .
+          docker push ${{ env.REGISTRY }}/telecom/usage-update-service:${IMAGE_TAG}
+          docker push ${{ env.REGISTRY }}/telecom/usage-update-service:latest
+
+  deploy:
+    needs: release
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Login to Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Set AKS context
+        uses: azure/aks-set-context@v3
+        with:
+          resource-group: ${{ env.RESOURCE_GROUP }}
+          cluster-name: ${{ env.CLUSTER_NAME }}
+
+      - name: Create namespace if not exists
+        run: |
+          kubectl create namespace ${{ env.NAMESPACE }} --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Generate deployment manifest
+        env:
+          IMAGE_TAG: ${{ needs.release.outputs.image_tag }}
+        run: |
+          # Export variables for envsubst
+          export namespace=${{ env.NAMESPACE }}
+          export query_image_path=${{ env.REGISTRY }}/telecom/usage-query-service:${IMAGE_TAG}
+          export management_image_path=${{ env.REGISTRY }}/telecom/usage-management-service:${IMAGE_TAG}
+          export update_image_path=${{ env.REGISTRY }}/telecom/usage-update-service:${IMAGE_TAG}
+          export resources_requests_cpu=250m
+          export resources_requests_memory=512Mi
+          export resources_limits_cpu=500m
+          export resources_limits_memory=1024Mi
+          export EVENT_HUB_CONNECTION_STRING="${{ secrets.EVENT_HUB_CONNECTION_STRING }}"
+          export EVENT_HUB_NAME="${{ secrets.EVENT_HUB_NAME }}"
+          export STORAGE_CONNECTION_STRING="${{ secrets.STORAGE_CONNECTION_STRING }}"
+          
+          # Generate deployment file
+          envsubst < deployment/deploy.yaml.template > deployment/deploy.yaml
+          
+          # Debug: Print generated manifest
+          echo "Generated manifest:"
+          cat deployment/deploy.yaml
+
+      - name: Deploy to AKS
+        run: |
+          kubectl apply -f deployment/deploy.yaml
+          
+          # Wait for deployments to be ready
+          kubectl wait --for=condition=ready pod -l "app=usage-query-service" -n ${{ env.NAMESPACE }} --timeout=300s
+          kubectl wait --for=condition=ready pod -l "app=usage-management-service" -n ${{ env.NAMESPACE }} --timeout=300s
+          kubectl wait --for=condition=ready pod -l "app=usage-update-service" -n ${{ env.NAMESPACE }} --timeout=300s
+
+      - name: Verify services
+        run: |
+          echo "Verifying service endpoints..."
+          
+          # Get service IPs
+          QUERY_IP=$(kubectl get svc usage-query-service -n ${{ env.NAMESPACE }} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          MANAGEMENT_IP=$(kubectl get svc usage-management-service -n ${{ env.NAMESPACE }} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          UPDATE_IP=$(kubectl get svc usage-update-service -n ${{ env.NAMESPACE }} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          
+          echo "Query Service IP: $QUERY_IP"
+          echo "Management Service IP: $MANAGEMENT_IP"
+          echo "Update Service IP: $UPDATE_IP"
+          
+          if [ -z "$QUERY_IP" ] || [ -z "$MANAGEMENT_IP" ] || [ -z "$UPDATE_IP" ]; then
+            echo "Error: Service IPs not available"
+            exit 1
+          fi

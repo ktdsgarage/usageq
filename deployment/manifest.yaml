@@ -14,7 +14,7 @@ data:
   # EventHub 관련 설정 추가
   EVENT_HUB_CONSUMER_GROUP: "$Default"
   # Checkpoint Store 설정 추가 
-  BLOB_CONTAINER: "unicorn-checkpoints-usageq"
+  BLOB_CONTAINER: "unicorn-checkpoints-usageq" "unicorn-eventhub-checkpoints"
 ---
 # Secret
 apiVersion: v1

@@ -1,0 +1,101 @@
+# Gateway
+apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  name: usage-gateway
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+    - port:
+        number: 80
+        name: http
+        protocol: HTTP
+      hosts:
+        - "ktds.usage.com"
+        
+---
+
+# VirtualService
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: usage-query-routing
+spec:
+  hosts:
+  - usage-query-service
+  http:
+  - match:
+    - headers:
+        x-user-type:
+          exact: "vip"
+    route:
+    - destination:
+        host: usage-query-service
+        subset: vip
+  - route:
+    - destination:
+        host: usage-query-service
+        subset: regular
+
+---  
+      
+# DestinationRule
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: usage-query-bulkhead
+spec:
+  host: usage-query-service
+  subsets:
+    - name: vip
+      labels:
+        tier: vip
+      trafficPolicy:
+        connectionPool:
+          tcp:
+            # VIP용 최대 TCP 연결 수
+            maxConnections: 100
+            connectTimeout: 3s
+          http:
+            # VIP용 최대 대기 요청 수
+            http1MaxPendingRequests: 10
+            maxRequestsPerConnection: 10
+            maxRetries: 3
+        outlierDetection:
+          # 연속된 게이트웨이 오류(502,503,504) 임계값 - VIP
+          consecutiveGatewayErrors: 10
+          # 연속된 5xx 오류 임계값 - VIP
+          consecutive5xxErrors: 10
+          # 오류 검사 주기
+          interval: 10s
+          # 제외 시간
+          baseEjectionTime: 30s
+          # 최대 제외 비율
+          maxEjectionPercent: 50
+    - name: regular
+      labels:
+        tier: regular
+      trafficPolicy:
+        connectionPool:
+          tcp:
+            # 일반용 최대 TCP 연결 수
+            maxConnections: 50
+            connectTimeout: 3s
+          http:
+            # 일반용 최대 대기 요청 수
+            http1MaxPendingRequests: 5
+            maxRequestsPerConnection: 5
+            maxRetries: 2
+        outlierDetection:
+          # 연속된 게이트웨이 오류(502,503,504) 임계값 - 일반
+          consecutiveGatewayErrors: 5
+          # 연속된 5xx 오류 임계값 - 일반
+          consecutive5xxErrors: 5
+          # 오류 검사 주기
+          interval: 10s
+          # 제외 시간
+          baseEjectionTime: 30s
+          # 최대 제외 비율
+          maxEjectionPercent: 50
+

@@ -1,0 +1,92 @@
+# Gateway
+apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  name: usage-gateway
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+    - port:
+        number: 80
+        name: http
+        protocol: HTTP
+      hosts:
+        - "ktds.usage.com"
+---
+# VirtualService
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: usage-routing
+spec:
+  hosts:
+    - "ktds.usage.com"
+  gateways:
+    - usage-gateway
+  http:
+    - match:
+        - uri:
+            prefix: "/api/manage"
+      route:
+        - destination:
+            host: usage-management-service
+            port:
+              number: 80
+    - match:
+        - uri:
+            prefix: "/api/usage"
+      route:
+        - destination:
+            host: usage-query-service
+            port:
+              number: 80
+    - match:
+        - uri:
+            prefix: "/api/monitor"
+      route:
+        - destination:
+            host: usage-update-service
+            port:
+              number: 80
+
+---
+
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: usage-query-circuit-breaker
+spec:
+  host: usage-query-service
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        # 허용되는 동시 TCP 연결의 최대 수
+        # 이 값을 초과하면 추가 연결은 큐잉되거나 실패 처리됨
+        maxConnections: 100
+        # TCP 연결 설정 시도의 제한 시간
+        # 이 시간을 초과하면 연결 시도가 실패로 처리됨
+        connectTimeout: 3s
+      http:
+        # 백엔드로 전달되지 못하고 대기 중인 HTTP 요청의 최대 수
+        # 이 값을 초과하면 추가 요청은 429(Too Many Requests) 오류로 응답됨
+        http1MaxPendingRequests: 10
+        # 단일 HTTP/1.1 연결을 통해 처리될 수 있는 최대 요청 수
+        # 이 값에 도달하면 연결이 닫히고 새로운 연결이 생성됨
+        maxRequestsPerConnection: 10
+        # 요청 실패 시 최대 재시도 횟수
+        # 이 횟수를 초과하면 요청은 최종적으로 실패로 처리됨
+        maxRetries: 3
+    outlierDetection:
+      # 연속된 5xx 오류(500-599)가 이 횟수를 초과하면 해당 Pod를 로드밸런서 풀에서 제외
+      consecutive5xxErrors: 5
+      # Envoy가 모든 업스트림 호스트(Pod)의 상태를 검사하는 시간 간격
+      # 이 간격으로 연속 오류 수를 확인하며, 임계값 초과 시 해당 호스트(Pod)를 로드밸런서 풀에서 제외함
+      interval: 10s
+      # 서비스 인스턴스가 제외된 후 다시 포함될 때까지의 기본 시간
+      # 반복적인 실패가 발생하면 이 시간은 점진적으로 증가될 수 있음
+      baseEjectionTime: 30s
+      # 한 번에 Circuit Breaker에 의해 제외될 수 있는 서비스 인스턴스(Pod)의 최대 비율
+      # 전체 서비스의 중단을 방지하기 위해 일부 인스턴스만 제외하도록 함
+      maxEjectionPercent: 50
+      

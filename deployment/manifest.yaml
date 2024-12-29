@@ -4,10 +4,8 @@ kind: ConfigMap
 metadata:
   name: usage-config
 data:
-  POSTGRES_HOST: "postgres-usageq-postgresql-primary-hl"
   POSTGRES_PORT: "5432"
   POSTGRES_DB: "telecomdb"
-  REDIS_HOST: "redis-usageq-master" 
   REDIS_PORT: "6379"
   REDIS_USERNAME: "root"
 
@@ -94,6 +92,11 @@ spec:
             name: usage-config
         - secretRef:
             name: usage-secret
+        env:
+        - name: POSTGRES_HOST
+          value: postgres-usageq-postgresql-read-hl
+        - name: REDIS_HOST
+          value: redis-usageq-headless
 ---
 apiVersion: v1
 kind: Service
@@ -133,6 +136,11 @@ spec:
             name: usage-config
         - secretRef:
             name: usage-secret
+        env:
+        - name: POSTGRES_HOST
+          value: postgres-usageq-postgresql-primary-hl
+        - name: REDIS_HOST
+          value: redis-usageq-master
 ---
 apiVersion: v1
 kind: Service

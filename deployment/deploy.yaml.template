@@ -11,7 +11,6 @@ data:
   REDIS_HOST: "redis-usageq-master"
   REDIS_PORT: "6379"
   REDIS_USERNAME: "root"
-  EVENT_HUB_CONSUMER_GROUP: "\$Default"
   BLOB_CONTAINER: "unicorn-checkpoints-usageq"
 ---
 # Secret

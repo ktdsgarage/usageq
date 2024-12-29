@@ -10,9 +10,7 @@ data:
   REDIS_HOST: "redis-usageq-master" 
   REDIS_PORT: "6379"
   REDIS_USERNAME: "root"
-  
-  # EventHub 관련 설정 추가
-  EVENT_HUB_CONSUMER_GROUP: "$Default"
+
   # Checkpoint Store 설정 추가 
   BLOB_CONTAINER: "unicorn-checkpoints-usageq"
 ---

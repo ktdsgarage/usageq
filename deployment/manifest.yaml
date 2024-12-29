@@ -36,11 +36,11 @@ spec:
   replicas: 1
   selector:
     matchLabels:
-      app: usage-management-service
+      application: usage-management-service
   template:
     metadata:
       labels:
-        app: usage-management-service
+        application: usage-management-service
     spec:
       containers:
       - name: usage-management-service
@@ -64,7 +64,7 @@ spec:
   - port: 80
     targetPort: 8080
   selector:
-    app: usage-management-service
+    application: usage-management-service
 ---
 # Query Service
 apiVersion: apps/v1
@@ -75,11 +75,11 @@ spec:
   replicas: 1
   selector:
     matchLabels:
-      app: usage-query-service
+      application: usage-query-service
   template:
     metadata:
       labels:
-        app: usage-query-service
+        application: usage-query-service
     spec:
       containers:
       - name: usage-query-service
@@ -108,7 +108,7 @@ spec:
   - port: 80
     targetPort: 8081
   selector:
-    app: usage-query-service
+    application: usage-query-service
 ---
 # Update Service  
 apiVersion: apps/v1
@@ -118,12 +118,12 @@ metadata:
 spec:
   replicas: 1
   selector:
-    matchLabels: 
-      app: usage-update-service
+    matchLabels:
+      application: usage-update-service
   template:
     metadata:
       labels:
-        app: usage-update-service
+        application: usage-update-service
     spec:
       containers:
       - name: usage-update-service
@@ -152,4 +152,4 @@ spec:
   - port: 80
     targetPort: 8082
   selector:
-    app: usage-update-service
+    application: usage-update-service

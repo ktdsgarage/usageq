@@ -7,7 +7,7 @@ data:
   POSTGRES_PORT: "5432"
   POSTGRES_DB: "telecomdb"
   REDIS_PORT: "6379"
-  REDIS_USERNAME: "root"
+  REDIS_USERNAME: "default"
 
   # Checkpoint Store 설정 추가 
   BLOB_CONTAINER: "unicorn-checkpoints-usageq"
@@ -96,7 +96,7 @@ spec:
         - name: POSTGRES_HOST
           value: postgres-usageq-postgresql-read-hl
         - name: REDIS_HOST
-          value: redis-usageq-headless
+          value: redis-usageq-master
 ---
 apiVersion: v1
 kind: Service

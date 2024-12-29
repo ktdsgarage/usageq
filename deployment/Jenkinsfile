@@ -140,15 +140,11 @@ podTemplate(
                         export management_image_path=${managementImagePath}
                         export query_image_path=${queryImagePath}
                         export update_image_path=${updateImagePath}
-                        export resources_requests_cpu=${props.resources_requests_cpu}
-                        export resources_requests_memory=${props.resources_requests_memory}
-                        export resources_limits_cpu=${props.resources_limits_cpu}
-                        export resources_limits_memory=${props.resources_limits_memory}
 
                         # Generate deployment file
                         envsubst < deployment/${manifest}.template > deployment/${manifest}
 
-                        # Debug: Print generated manifest
+                        # Print generated manifest for debugging
                         echo "Generated manifest:"
                         cat deployment/${manifest}
                     """

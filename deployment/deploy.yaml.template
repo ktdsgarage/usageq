@@ -5,12 +5,11 @@ metadata:
   name: usage-config
   namespace: ${namespace}
 data:
-  POSTGRES_HOST: "postgres-usageq-postgresql-primary-hl"
   POSTGRES_PORT: "5432"
   POSTGRES_DB: "telecomdb"
-  REDIS_HOST: "redis-usageq-master"
   REDIS_PORT: "6379"
   REDIS_USERNAME: "root"
+  # Checkpoint Store 설정 추가
   BLOB_CONTAINER: "unicorn-checkpoints-usageq"
 ---
 # Secret
@@ -23,6 +22,7 @@ stringData:
   POSTGRES_USER: "postgres"
   POSTGRES_PASSWORD: "Passw0rd"
   REDIS_PASSWORD: "Passw0rd"
+  # EventHub 관련 설정 추가
   EVENT_HUB_CONNECTION_STRING: "Endpoint=sb://unicorn-ns-usage.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=mMSrE3nkjMWpp8OOFywKH1B5Lti06YmiN+AEhJlCmtQ="
   EVENT_HUB_NAME: "unicorn-name-usage"
   STORAGE_CONNECTION_STRING: "DefaultEndpointsProtocol=https;EndpointSuffix=core.windows.net;AccountName=unicornstorageusageq;AccountKey=374LvAxq4frBGT/Xg0Eq802vjiJRTm2ZbhU8Rlj+7SQXcAz4M0B0p6d5Ah7bzXSRrLQBY6mqozop+AStHd35MA==;BlobEndpoint=https://unicornstorageusageq.blob.core.windows.net/;FileEndpoint=https://unicornstorageusageq.file.core.windows.net/;QueueEndpoint=https://unicornstorageusageq.queue.core.windows.net/;TableEndpoint=https://unicornstorageusageq.table.core.windows.net/"
@@ -54,13 +54,6 @@ spec:
             name: usage-config
         - secretRef:
             name: usage-secret
-        resources:
-          requests:
-            cpu: ${resources_requests_cpu}
-            memory: ${resources_requests_memory}
-          limits:
-            cpu: ${resources_limits_cpu}
-            memory: ${resources_limits_memory}
 ---
 apiVersion: v1
 kind: Service
@@ -102,13 +95,11 @@ spec:
             name: usage-config
         - secretRef:
             name: usage-secret
-        resources:
-          requests:
-            cpu: ${resources_requests_cpu}
-            memory: ${resources_requests_memory}
-          limits:
-            cpu: ${resources_limits_cpu}
-            memory: ${resources_limits_memory}
+        env:
+        - name: POSTGRES_HOST
+          value: postgres-usageq-postgresql-read-hl
+        - name: REDIS_HOST
+          value: redis-usageq-headless
 ---
 apiVersion: v1
 kind: Service
@@ -150,13 +141,11 @@ spec:
             name: usage-config
         - secretRef:
             name: usage-secret
-        resources:
-          requests:
-            cpu: ${resources_requests_cpu}
-            memory: ${resources_requests_memory}
-          limits:
-            cpu: ${resources_limits_cpu}
-            memory: ${resources_limits_memory}
+        env:
+        - name: POSTGRES_HOST
+          value: postgres-usageq-postgresql-primary-hl
+        - name: REDIS_HOST
+          value: redis-usageq-master
 ---
 apiVersion: v1
 kind: Service

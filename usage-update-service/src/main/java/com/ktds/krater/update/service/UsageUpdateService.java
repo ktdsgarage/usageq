@@ -1,5 +1,6 @@
 package com.ktds.krater.update.service;
 
+import com.ktds.krater.common.constants.CacheConstants;
 import com.ktds.krater.common.dto.UsageUpdateRequest;
 import com.ktds.krater.common.entity.*;
 import com.ktds.krater.update.repository.UsageRepository;
@@ -50,7 +51,8 @@ public class UsageUpdateService {
 
     private void invalidateCache(String userId) {
         try {
-            redisTemplate.delete("usage:" + userId);
+            String cacheKey = CacheConstants.USAGE_CACHE_PREFIX + userId;
+            redisTemplate.delete(cacheKey);
         } catch (Exception e) {
             log.warn("Failed to invalidate cache - userId: {}", userId, e);
         }

@@ -4,6 +4,7 @@ kind: ConfigMap
 metadata:
   name: usage-config
 data:
+  SERVER_PORT: "8080"
   POSTGRES_PORT: "5432"
   POSTGRES_DB: "telecomdb"
   REDIS_PORT: "6379"
@@ -22,10 +23,10 @@ stringData:
   POSTGRES_PASSWORD: "Passw0rd"
   REDIS_PASSWORD: "Passw0rd"
   # EventHub 관련 설정 추가
-  EVENT_HUB_CONNECTION_STRING: "Endpoint=sb://unicorn-ns-usage.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=mMSrE3nkjMWpp8OOFywKH1B5Lti06YmiN+AEhJlCmtQ="
+  EVENT_HUB_CONNECTION_STRING: "Endpoint=sb://unicorn-ns-usageq.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=63BvPqjleXqqWS30g3Tk4To6pLZ5Jp+It+AEhIBkcjM="
   EVENT_HUB_NAME: "unicorn-name-usage"
   STORAGE_CONNECTION_STRING: "DefaultEndpointsProtocol=https;EndpointSuffix=core.windows.net;AccountName=unicornstorageusageq;AccountKey=374LvAxq4frBGT/Xg0Eq802vjiJRTm2ZbhU8Rlj+7SQXcAz4M0B0p6d5Ah7bzXSRrLQBY6mqozop+AStHd35MA==;BlobEndpoint=https://unicornstorageusageq.blob.core.windows.net/;FileEndpoint=https://unicornstorageusageq.file.core.windows.net/;QueueEndpoint=https://unicornstorageusageq.queue.core.windows.net/;TableEndpoint=https://unicornstorageusageq.table.core.windows.net/"
-  
+
 ---
 # Management Service
 apiVersion: apps/v1
@@ -64,7 +65,7 @@ spec:
   - port: 80
     targetPort: 8080
   selector:
-    application: usage-management-service
+    app: usage-management-service
 ---
 # Query Service
 apiVersion: apps/v1
@@ -75,7 +76,7 @@ spec:
   replicas: 1
   selector:
     matchLabels:
-      application: usage-query-service
+      app: usage-query-service
   template:
     metadata:
       labels:
@@ -106,7 +107,7 @@ spec:
   type: LoadBalancer
   ports:
   - port: 80
-    targetPort: 8081
+    targetPort: 8080
   selector:
     app: usage-query-service
 ---
@@ -119,11 +120,11 @@ spec:
   replicas: 1
   selector:
     matchLabels:
-      application: usage-update-service
+      app: usage-update-service
   template:
     metadata:
       labels:
-        application: usage-update-service
+        app: usage-update-service
     spec:
       containers:
       - name: usage-update-service
@@ -150,6 +151,6 @@ spec:
   type: LoadBalancer
   ports:
   - port: 80
-    targetPort: 8082
+    targetPort: 8080
   selector:
     app: usage-update-service

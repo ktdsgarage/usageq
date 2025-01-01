@@ -23,8 +23,8 @@ stringData:
   POSTGRES_PASSWORD: "Passw0rd"
   REDIS_PASSWORD: "Passw0rd"
   # EventHub 관련 설정 추가
-  EVENT_HUB_CONNECTION_STRING: "Endpoint=sb://unicorn-ns-usageq.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=63BvPqjleXqqWS30g3Tk4To6pLZ5Jp+It+AEhIBkcjM="
   EVENT_HUB_NAME: "unicorn-name-usage"
+  EVENT_HUB_CONNECTION_STRING: "Endpoint=sb://unicorn-ns-usageq.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=63BvPqjleXqqWS30g3Tk4To6pLZ5Jp+It+AEhIBkcjM="
   STORAGE_CONNECTION_STRING: "DefaultEndpointsProtocol=https;EndpointSuffix=core.windows.net;AccountName=unicornstorageusageq;AccountKey=374LvAxq4frBGT/Xg0Eq802vjiJRTm2ZbhU8Rlj+7SQXcAz4M0B0p6d5Ah7bzXSRrLQBY6mqozop+AStHd35MA==;BlobEndpoint=https://unicornstorageusageq.blob.core.windows.net/;FileEndpoint=https://unicornstorageusageq.file.core.windows.net/;QueueEndpoint=https://unicornstorageusageq.queue.core.windows.net/;TableEndpoint=https://unicornstorageusageq.table.core.windows.net/"
 
 ---

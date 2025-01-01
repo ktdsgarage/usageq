@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Usage Service Metrics Dashboard</title>
+    <link href="css/style.css" rel="stylesheet">
+    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+</head>
+<body>
+<div class="container">
+    <h1>Usage Service Metrics</h1>
+
+    <!-- Performance Metrics -->
+    <div class="metrics-grid">
+        <!-- Cache Metrics (Query Service) -->
+        <div class="metric-card">
+            <h2>Cache Performance</h2>
+            <div class="current-metrics">
+                <div class="metric">
+                    <span class="label">Hit Ratio:</span>
+                    <span id="currentCacheHitRatio" class="value">-</span>
+                </div>
+                <div class="metric">
+                    <span class="label">Miss Ratio:</span>
+                    <span id="currentCacheMissRatio" class="value">-</span>
+                </div>
+            </div>
+            <div id="cacheChart" class="chart"></div>
+        </div>
+
+        <!-- Database Metrics (Query Service) -->
+        <div class="metric-card">
+            <h2>Database Performance</h2>
+            <div class="current-metrics">
+                <div class="metric">
+                    <span class="label">Avg Query Time:</span>
+                    <span id="currentAvgQueryTime" class="value">-</span>
+                </div>
+                <div class="metric">
+                    <span class="label">Query Rate:</span>
+                    <span id="currentQueryRate" class="value">-</span>
+                </div>
+                <div class="metric">
+                    <span class="label">Query Errors:</span>
+                    <span id="currentQueryErrors" class="value">-</span>
+                </div>
+            </div>
+            <div id="dbChart" class="chart"></div>
+        </div>
+
+        <!-- Response Metrics (Query Service) -->
+        <div class="metric-card">
+            <h2>Response Performance</h2>
+            <div class="current-metrics">
+                <div class="metric">
+                    <span class="label">Avg Response Time:</span>
+                    <span id="currentAvgResponseTime" class="value">-</span>
+                </div>
+                <div class="metric">
+                    <span class="label">Request Rate:</span>
+                    <span id="currentRequestRate" class="value">-</span>
+                </div>
+                <div class="metric">
+                    <span class="label">Response Errors:</span>
+                    <span id="currentResponseErrors" class="value">-</span>
+                </div>
+            </div>
+            <div id="responseChart" class="chart"></div>
+        </div>
+    </div>
+
+    <div class="metrics-grid">
+        <!-- Event Processing Metrics (Update Service) -->
+        <div class="metric-card">
+            <h2>Event Processing</h2>
+            <div class="current-metrics">
+                <div class="metric">
+                    <span class="label">Processed Events:</span>
+                    <span id="currentEventsProcessed" class="value">-</span>
+                </div>
+                <div class="metric">
+                    <span class="label">Processing Time:</span>
+                    <span id="currentEventProcessingTime" class="value">-</span>
+                </div>
+                <div class="metric">
+                    <span class="label">Processing Errors:</span>
+                    <span id="currentEventErrors" class="value">-</span>
+                </div>
+                <div class="metric">
+                    <span class="label">Fatal Errors:</span>
+                    <span id="currentFatalEventErrors" class="value">-</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Usage Update Metrics (Management Service) -->
+        <div class="metric-card">
+            <h2>Usage Update</h2>
+            <div class="current-metrics">
+                <div class="metric">
+                    <span class="label">Update Requests:</span>
+                    <span id="currentUpdateRequests" class="value">-</span>
+                </div>
+                <div class="metric">
+                    <span class="label">Update Time:</span>
+                    <span id="currentUpdateTime" class="value">-</span>
+                </div>
+                <div class="metric">
+                    <span class="label">Update Errors:</span>
+                    <span id="currentUpdateErrors" class="value">-</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- System Resources -->
+    <div class="system-metrics">
+        <h2>System Resource Usage</h2>
+        <div class="services-grid">
+
+            <!-- Query Service -->
+            <div class="service-card">
+                <h3>Query Service</h3>
+                <div class="resource-metrics">
+                    <div class="metric">
+                        <span class="label">CPU Usage:</span>
+                        <span id="queryCpuUsage" class="value">-</span>
+                    </div>
+                    <div class="metric">
+                        <span class="label">Memory Usage:</span>
+                        <span id="queryMemoryUsage" class="value">-</span>
+                    </div>
+                    <div class="metric">
+                        <span class="label">Heap Usage:</span>
+                        <span id="queryHeapUsage" class="value">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Management Service -->
+            <div class="service-card">
+                <h3>Management Service</h3>
+                <div class="resource-metrics">
+                    <div class="metric">
+                        <span class="label">CPU Usage:</span>
+                        <span id="managementCpuUsage" class="value">-</span>
+                    </div>
+                    <div class="metric">
+                        <span class="label">Memory Usage:</span>
+                        <span id="managementMemoryUsage" class="value">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Update Service -->
+            <div class="service-card">
+                <h3>Update Service</h3>
+                <div class="resource-metrics">
+                    <div class="metric">
+                        <span class="label">CPU Usage:</span>
+                        <span id="updateCpuUsage" class="value">-</span>
+                    </div>
+                    <div class="metric">
+                        <span class="label">Memory Usage:</span>
+                        <span id="updateMemoryUsage" class="value">-</span>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<script>
+    window.config = {
+        queryService: "http://4.230.151.165",
+        managementService: "http://4.230.148.226",
+        updateService: "http://20.249.128.67"
+    };
+</script>
+<script src="js/metrics.js"></script>
+</body>
+</html>

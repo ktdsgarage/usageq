@@ -4,6 +4,8 @@ import com.ktds.krater.common.constants.CacheConstants;
 import com.ktds.krater.common.dto.UsageUpdateRequest;
 import com.ktds.krater.common.entity.*;
 import com.ktds.krater.update.repository.UsageRepository;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -17,9 +19,12 @@ public class UsageUpdateService {
 
     private final UsageRepository usageRepository;
     private final RedisTemplate<String, Object> redisTemplate;
+    private final MeterRegistry meterRegistry;
 
     @Transactional
     public void updateUsage(UsageUpdateRequest request) {
+        Timer.Sample sample = Timer.start(meterRegistry);
+
         try {
             // 1. DB 업데이트
             Usage usage = usageRepository.findByUserIdWithLock(request.getUserId())
@@ -30,10 +35,19 @@ public class UsageUpdateService {
 
             // 2. 캐시 무효화
             invalidateCache(request.getUserId());
-            
+
+            // 성공 메트릭 증가
+            meterRegistry.counter("usage.updates.success").increment();
+
+            // 처리 시간 기록
+            sample.stop(meterRegistry.timer("usage.update.time"));
+
             log.info("Successfully updated usage - userId: {}", request.getUserId());
             
         } catch (Exception e) {
+            // 실패 메트릭 증가
+            meterRegistry.counter("usage.updates.error").increment();
+
             log.error("Failed to update usage - userId: {}", request.getUserId(), e);
             throw e;
         }

@@ -8,7 +8,10 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "사용량 조회 API", description = "사용자의 사용량 조회 API")
 @RestController
@@ -17,6 +20,7 @@ import org.springframework.web.bind.annotation.*;
 public class UsageController {
 
    private final UsageQueryService usageQueryService;
+
 
    @Operation(summary = "사용량 조회", description = "사용자의 음성/영상/문자/데이터 사용량을 조회합니다.")
    @GetMapping("/{userId}")
